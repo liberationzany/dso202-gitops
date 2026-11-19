@@ -14,7 +14,7 @@ database:
 
 backend:
   image:
-    tag: "1.1"
+    tag: "1.0"
   replicas: 1
   service:
     # Not mapped by kind. Reached with:
