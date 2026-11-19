@@ -32,9 +32,10 @@ spec:
   # renders, including the Job used as a hook. ResourceQuota, LimitRange, Role,
   # RoleBinding, and SealedSecret are absent on purpose: they belong to the
   # platform layer, so the workload project cannot loosen its own limits.
-  # No addition was needed: the database PVC is created by the StatefulSet
-  # controller from volumeClaimTemplates, not rendered by the chart, so Argo
-  # CD never applies a PersistentVolumeClaim.
+  # The database PVC is created by the StatefulSet controller from
+  # volumeClaimTemplates, not rendered by the chart, so Argo CD never applies
+  # a PersistentVolumeClaim and the kind is not listed. ReplicaSet and Pod
+  # (end of the list) were added in Task 6; their comment explains why.
   namespaceResourceWhitelist:
     - group: apps
       kind: Deployment
@@ -48,3 +49,14 @@ spec:
       kind: ServiceAccount
     - group: batch
       kind: Job
+    # Added in Task 6 - not rendered by the chart, but CREATED by its
+    # controllers. Argo CD v3.5.6 also applies this whitelist to the resource
+    # tree: kinds missing here are hidden, so without these two the dev and
+    # staging trees had no ReplicaSets and no Pods, and Argo CD (which serves
+    # logs only for Pods in an Application's tree) returned no logs to anyone.
+    # Cost: the chart could now render a bare Pod or ReplicaSet; both stay
+    # inside the namespace quota and limits and grant no extra privilege.
+    - group: apps
+      kind: ReplicaSet
+    - group: ""
+      kind: Pod
