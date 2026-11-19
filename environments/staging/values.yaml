@@ -23,7 +23,7 @@ backend:
 
 frontend:
   image:
-    tag: "1.0"
+    tag: "1.1"
   replicas: 1
   backendUrl: http://localhost:8082
   service:
