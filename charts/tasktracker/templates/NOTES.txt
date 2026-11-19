@@ -1,0 +1,9 @@
+{{- /*
+File       : charts/tasktracker/templates/NOTES.txt
+Assignment : DSO202 Assignment 4
+Descriptor : Unit III 3.2 - chart notes
+Purpose    : Printed by 'helm install'. Argo CD does not show it.
+*/ -}}
+Task Tracker (frontend {{ .Values.frontend.image.tag }}, backend {{ .Values.backend.image.tag }}) in namespace {{ .Release.Namespace }}.
+Frontend Service {{ include "tasktracker.fullname" . }}-frontend, node port {{ .Values.frontend.service.nodePort }}; browser API address {{ .Values.frontend.backendUrl }}.
+Credentials are read from Secret {{ .Values.existingSecret }}, which this chart does not create.

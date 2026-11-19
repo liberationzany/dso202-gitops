@@ -1,0 +1,126 @@
+{{- /*
+=============================================================================
+File       : charts/tasktracker/templates/db.yaml
+Assignment : DSO202 Assignment 4
+Descriptor : Unit II 2.1 - StatefulSets; Unit IV 4.3.2 - sync waves
+Purpose    : PostgreSQL: the governing headless Service, the client Service
+             (DB_HOST) and a one-replica StatefulSet. Sync wave "0" (contract
+             C5): the database is applied, and must be Healthy, before the
+             backend (wave 1) and the frontend (wave 2).
+Note       : The data PVC comes from volumeClaimTemplates, so it is created by
+             the StatefulSet controller, not by Argo CD. It is not tracked by
+             the Application and survives the Application's deletion.
+=============================================================================
+*/}}
+{{- $fullname := include "tasktracker.fullname" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-db-headless
+  labels:
+    {{- include "tasktracker.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  clusterIP: None
+  selector:
+    {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "db") | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-db
+  labels:
+    {{- include "tasktracker.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "db") | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $fullname }}-db
+  labels:
+    {{- include "tasktracker.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  serviceName: {{ $fullname }}-db-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "db") | nindent 6 }}
+  # RollingUpdate (not OnDelete): Argo CD reports an OnDelete StatefulSet as
+  # Progressing forever, which would stall every later wave.
+  updateStrategy:
+    type: RollingUpdate
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels:
+        {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "db") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $fullname }}-db
+      automountServiceAccountToken: false
+      containers:
+        - name: db
+          image: {{ include "tasktracker.image" .Values.database.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef: {name: {{ $fullname }}-config, key: POSTGRES_DB}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.existingSecret }}, key: POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.existingSecret }}, key: POSTGRES_PASSWORD}
+            # A subdirectory, because the volume root may not be empty and
+            # initdb refuses a non-empty PGDATA (Assignment 1).
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          # Contract C5: Ready only when Postgres accepts connections.
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -h 127.0.0.1 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -h 127.0.0.1"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.database.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.database.storage }}

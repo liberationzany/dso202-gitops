@@ -1,0 +1,21 @@
+# =============================================================================
+# File       : charts/tasktracker/Chart.yaml
+# Assignment : DSO202 Assignment 4
+# Descriptor : Unit III 3.2 - Helm charts; Unit IV 4.3.1 - Helm as an
+#              Application source
+# Purpose    : Chart metadata. The chart is the Assignment 3 chart, adjusted to
+#              the GitOps chart contract C1-C11 (see README.md, Task 1).
+# =============================================================================
+apiVersion: v2
+name: tasktracker
+description: >-
+  Three-tier Task Tracker (nginx frontend, Node/Express backend, PostgreSQL
+  StatefulSet), delivered by Argo CD. Renders only the namespaced kinds the
+  dso202 AppProject permits; credentials, namespaces, quotas and RBAC belong
+  to the platform layer.
+type: application
+# The chart version changes whenever a template changes. Image versions are
+# NOT tied to it: they are values (contract C1), so a release is a values
+# commit, not a chart release.
+version: 0.4.0
+appVersion: "1.0"

@@ -1,0 +1,71 @@
+# =============================================================================
+# File       : charts/tasktracker/values.yaml
+# Assignment : DSO202 Assignment 4
+# Descriptor : Unit III 3.2 - chart values; Unit IV 4.3.1
+# Purpose    : Defaults only. Everything an environment changes is in
+#              environments/<env>/values.yaml, so the chart itself is identical
+#              in dev and staging (design rule 2).
+# =============================================================================
+
+# Name of the Secret holding DB_USER, DB_PASSWORD, POSTGRES_USER and
+# POSTGRES_PASSWORD. The chart never renders a Secret (contract C4): the
+# platform layer creates this one from a SealedSecret.
+existingSecret: tasktracker-credentials
+
+# Applied to every container. Never "Always": images are pinned, and the
+# local stand-in images are loaded into kind rather than pulled.
+imagePullPolicy: IfNotPresent
+
+database:
+  image:
+    repository: local/dso202-db      # contract C1: repository and tag are values
+    tag: "1.0"
+  name: taskdb                       # POSTGRES_DB and the backend's DB_NAME
+  storage: 1Gi
+  resources:                          # contract C7: quota requires both
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+
+backend:
+  image:
+    repository: local/dso202-backend
+    tag: "1.0"
+  replicas: 1
+  # Contract C3: additional environment variables, rendered as-is.
+  # Adding one is a values change only, no template change.
+  extraEnv: {}
+  service:
+    # The browser calls the backend directly (the given frontend has no /api
+    # proxy, see README), so in dev the backend needs a node port as well.
+    type: ClusterIP
+    nodePort: null
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 250m, memory: 128Mi}
+
+frontend:
+  image:
+    repository: local/dso202-frontend
+    tag: "1.0"
+  replicas: 1
+  # The address the BROWSER uses to reach the backend, rendered into
+  # config.js at container start. Must not be empty: the image's entrypoint
+  # replaces an empty value with http://localhost:8080.
+  backendUrl: http://localhost:8080
+  service:
+    # Contract C10: NodePort, with the port number as a value.
+    type: NodePort
+    nodePort: 30080
+  resources:
+    requests: {cpu: 50m, memory: 32Mi}
+    limits: {cpu: 200m, memory: 64Mi}
+
+# Contract C9: an Ingress is not part of this assignment. The template
+# exists (from Assignment 3) but renders nothing unless enabled.
+ingress:
+  enabled: false
+  className: nginx
+  host: tasktracker.localhost
+
+smokeTest:
+  image: busybox:1.37

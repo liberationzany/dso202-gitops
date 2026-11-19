@@ -1,0 +1,115 @@
+{{- /*
+=============================================================================
+File       : charts/tasktracker/templates/backend.yaml
+Assignment : DSO202 Assignment 4
+Descriptor : Unit I 1.2 - Deployments and Services; Unit IV 4.3.2 - sync
+             waves; 4.3.3 - health
+Purpose    : The Express API. Sync wave "1": applied only after the database
+             (wave 0) is Healthy. progressDeadlineSeconds 120 (contract C6)
+             makes a failed rollout show as Degraded after two minutes
+             instead of the Kubernetes default of ten.
+=============================================================================
+*/}}
+{{- $fullname := include "tasktracker.fullname" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-backend
+  labels:
+    {{- include "tasktracker.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: {{ .Values.backend.replicas }}
+  progressDeadlineSeconds: 120
+  selector:
+    matchLabels:
+      {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "backend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "backend") | nindent 8 }}
+      annotations:
+        # Rolls the Pods when the rendered ConfigMap changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ $fullname }}-backend
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100            # "app" in the image
+        runAsGroup: 101
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: backend
+          image: {{ include "tasktracker.image" .Values.backend.image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef: {name: {{ $fullname }}-config, key: DB_HOST}
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef: {name: {{ $fullname }}-config, key: DB_PORT}
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef: {name: {{ $fullname }}-config, key: DB_NAME}
+            - name: APP_PORT
+              valueFrom:
+                configMapKeyRef: {name: {{ $fullname }}-config, key: APP_PORT}
+            - name: CORS_ORIGIN
+              valueFrom:
+                configMapKeyRef: {name: {{ $fullname }}-config, key: CORS_ORIGIN}
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.existingSecret }}, key: DB_USER}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.existingSecret }}, key: DB_PASSWORD}
+            {{- /* Contract C3: one more variable is one more line in a values file. */}}
+            {{- range $name, $value := .Values.backend.extraEnv }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+          # Contract C5: Ready only when GET /api/status succeeds (it runs
+          # SELECT 1, so it also proves the database connection).
+          readinessProbe:
+            httpGet: {path: /api/status, port: http}
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            tcpSocket: {port: http}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-backend
+  labels:
+    {{- include "tasktracker.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  type: {{ .Values.backend.service.type }}
+  selector:
+    {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "backend") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      {{- if and (eq .Values.backend.service.type "NodePort") .Values.backend.service.nodePort }}
+      nodePort: {{ .Values.backend.service.nodePort }}
+      {{- end }}

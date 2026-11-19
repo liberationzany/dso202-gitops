@@ -1,0 +1,38 @@
+{{- /*
+=============================================================================
+File       : charts/tasktracker/templates/ingress.yaml
+Assignment : DSO202 Assignment 4
+Descriptor : Unit II 2.2 - Ingress; contract C9
+Purpose    : Kept from Assignment 3 but disabled by default (contract C9): no
+             ingress controller is installed in this assignment, and Ingress
+             is not in the dso202 project's whitelist. Enabling it would make
+             Argo CD refuse the sync until the project allowed the kind.
+=============================================================================
+*/}}
+{{- if .Values.ingress.enabled }}
+{{- $fullname := include "tasktracker.fullname" . -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}
+  labels:
+    {{- include "tasktracker.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-backend
+                port: {name: http}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-frontend
+                port: {name: http}
+{{- end }}

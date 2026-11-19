@@ -1,0 +1,33 @@
+# =============================================================================
+# File       : environments/staging/values.yaml
+# Assignment : DSO202 Assignment 4
+# Descriptor : Unit III 3.2 - values per environment; Unit IV 4.3.1
+# Purpose    : Everything that differs in staging. Read by tasktracker-staging
+#              FROM A TAG, so editing this file on main changes nothing in
+#              staging until a new tag is promoted and synchronised by hand.
+# =============================================================================
+existingSecret: tasktracker-credentials
+
+database:
+  image:
+    tag: "1.0"
+
+backend:
+  image:
+    tag: "1.0"
+  replicas: 1
+  service:
+    # Not mapped by kind. Reached with:
+    #   kubectl port-forward -n dso202-staging svc/tasktracker-backend 8082:8080
+    type: ClusterIP
+
+frontend:
+  image:
+    tag: "1.0"
+  replicas: 1
+  backendUrl: http://localhost:8082
+  service:
+    type: NodePort
+    # Not mapped by kind (only 30080 and 30082 are). Reached with:
+    #   kubectl port-forward -n dso202-staging svc/tasktracker-frontend 8081:8080
+    nodePort: 30081

@@ -1,0 +1,24 @@
+{{- /*
+=============================================================================
+File       : charts/tasktracker/templates/configmap.yaml
+Assignment : DSO202 Assignment 4
+Descriptor : Unit I 1.2.5 - ConfigMaps; contract C2
+Purpose    : The non-secret half of the Assignment 1 env var contract, built
+             from values (contract C2). Credentials come from the Secret named
+             by .Values.existingSecret, never from here.
+=============================================================================
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tasktracker.fullname" . }}-config
+  labels:
+    {{- include "tasktracker.labels" . | nindent 4 }}
+data:
+  DB_HOST: {{ include "tasktracker.fullname" . }}-db
+  DB_PORT: "5432"
+  DB_NAME: {{ .Values.database.name | quote }}
+  POSTGRES_DB: {{ .Values.database.name | quote }}
+  APP_PORT: "8080"
+  CORS_ORIGIN: "*"
+  BACKEND_URL: {{ .Values.frontend.backendUrl | quote }}
