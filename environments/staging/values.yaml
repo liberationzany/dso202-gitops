@@ -14,8 +14,13 @@ database:
 
 backend:
   image:
-    tag: "1.0"
+    tag: "1.1"
   replicas: 1
+  # Backend 1.1 refuses to start without APP_ENV (its log: "required
+  # environment variable APP_ENV is not set ... one of: development,
+  # staging, production"). Supplied as a value - contract C3.
+  extraEnv:
+    APP_ENV: staging
   service:
     # Not mapped by kind. Reached with:
     #   kubectl port-forward -n dso202-staging svc/tasktracker-backend 8082:8080
