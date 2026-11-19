@@ -1,0 +1,79 @@
+# =============================================================================
+# File       : platform/dev/rbac.yaml
+# Assignment : DSO202 Assignment 4
+# Descriptor : Unit II 2.3 - RBAC (Role, RoleBinding, ServiceAccount)
+# Purpose    : The namespaced RBAC of Assignment 2, for dso202-dev:
+#                - deployer: create/update/patch the application's objects,
+#                  never delete and never RBAC (Assignment 2,
+#                  12-rbac-deployer.yaml). Under GitOps, Argo CD does the
+#                  deploying; this identity is kept for break-glass and CI
+#                  read access, and is defined here, in the platform layer,
+#                  because the workload project may not create Roles.
+#                - tasktracker-developers: the built-in 'view' ClusterRole in
+#                  this namespace only (13-rbac-viewers.yaml).
+# =============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: deployer
+  namespace: dso202-dev
+  labels:
+    dso202/assignment: "04"
+    dso202/environment: dev
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: deployer
+  namespace: dso202-dev
+  labels:
+    dso202/assignment: "04"
+    dso202/environment: dev
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  # Read-only, for "kubectl rollout status" and troubleshooting.
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "controllerrevisions"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "endpoints"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: deployer
+  namespace: dso202-dev
+  labels:
+    dso202/assignment: "04"
+    dso202/environment: dev
+subjects:
+  - kind: ServiceAccount
+    name: deployer
+    namespace: dso202-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: deployer
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tasktracker-developers-view
+  namespace: dso202-dev
+  labels:
+    dso202/assignment: "04"
+    dso202/environment: dev
+subjects:
+  - kind: Group
+    name: tasktracker-developers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view

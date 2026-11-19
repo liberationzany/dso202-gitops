@@ -1,0 +1,68 @@
+# =============================================================================
+# File       : platform/staging/quota-and-limits.yaml
+# Assignment : DSO202 Assignment 4
+# Descriptor : Unit I 1.5.3 - resource quotas and limit ranges
+# Purpose    : Caps what the staging namespace may consume, and gives containers
+#              defaults. Owned by the platform-staging Application (platform
+#              project), so the workload chart - delivered through the
+#              narrower dso202 project - cannot raise its own limits.
+# Source     : Practical 1, manifests/01-quota-and-limits.yaml. Assignment 2
+#              had no quota or limit range; the Practical 1 pair is the
+#              course's own version of these objects, resized for one copy of
+#              the Task Tracker (see the comments on each value).
+# =============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dso202-quota
+  namespace: dso202-staging
+  labels:
+    dso202/assignment: "04"
+    dso202/environment: staging
+spec:
+  # Once requests.cpu/memory are capped, EVERY container must declare
+  # requests (or receive them from the LimitRange below), or its Pod is
+  # rejected - including the smoke-test Job.
+  hard:
+    # One replica per tier needs about 0.3 CPU and 0.3Gi of requests; the
+    # caps leave room for a rolling update (old and new Pod side by side), the
+    # smoke-test Job, and a crash-looping Pod during Task 7.
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "2"
+    limits.memory: 2Gi
+    pods: "10"
+    # The chart renders four Services (frontend, backend, db, db-headless).
+    count/services: "6"
+    count/configmaps: "10"
+    count/secrets: "5"
+    # One database volume; the cap stops a mistaken replica count from
+    # creating more.
+    persistentvolumeclaims: "2"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dso202-limits
+  namespace: dso202-staging
+  labels:
+    dso202/assignment: "04"
+    dso202/environment: staging
+spec:
+  limits:
+    - type: Container
+      # Applied when a container declares none (the chart declares all).
+      default:
+        cpu: 200m
+        memory: 128Mi
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      # A container below these values fails in ways that look like bugs.
+      min:
+        cpu: 10m
+        memory: 16Mi
+      # The database's limits (500m, 256Mi) are the largest in the chart.
+      max:
+        cpu: "1"
+        memory: 512Mi
