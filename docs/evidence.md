@@ -1,7 +1,7 @@
 <!--
 File       : docs/evidence.md
 Assignment : DSO202 Assignment 4
-Descriptor : Unit IV 4.1-4.4 (evidence for Tasks 1-9)
+Descriptor : Unit IV 4.1-4.4 (evidence for Tasks 1-9 and bonus Task 10)
 Purpose    : Command output for every task, recorded as it was run (19-20
              November 2026). Credential values, tokens and key material never
              appear: secrets are shown as key names, lengths or hashes only.
@@ -1888,3 +1888,102 @@ sealing keys in the rebuilt cluster: 1
 $ date
 Fri Nov 20 00:58:34 BST 2026
 ```
+
+## Task 10 (bonus) - Chart and Values from Separate Sources
+
+Changed file: [`argocd/applications/tasktracker-dev.yaml`](../argocd/applications/tasktracker-dev.yaml)
+(merged as PR #7). `source` became `sources`: source 1 is the chart with
+`valueFiles: [$values/environments/dev/values.yaml]`, source 2 has no `path`
+and `ref: values`. `$values` resolves to the root of source 2, so the
+`../../` of the single-source path is gone.
+
+```text
+## BEFORE: single source
+
+$ argocd app get tasktracker-dev | sed -n "/^Source/,/^Health/p"
+Source:
+- Repo:             https://github.com/liberationzany/dso202-gitops.git
+  Target:           main
+  Path:             charts/tasktracker
+  Helm Values:      ../../environments/dev/values.yaml
+SyncWindow:         Sync Allowed
+Sync Policy:        Automated (Prune)
+Sync Status:        Synced to main (a892ed0)
+Health Status:      Healthy
+
+$ kubectl get deploy -n dso202-dev -o custom-columns=NAME:.metadata.name,GENERATION:.metadata.generation,IMAGE:.spec.template.spec.containers[0].image
+NAME                   GENERATION   IMAGE
+tasktracker-backend    1            local/dso202-backend:1.1
+tasktracker-frontend   1            local/dso202-frontend:1.1
+
+## AFTER: two sources (PR #7)
+
+$ gh pr merge 7 --repo liberationzany/dso202-gitops --squash --delete-branch 2>&1 | tail -1; date +%T
+13:02:26
+
+$ date +%T; git log --oneline -1
+13:03:00
+5b9efe9 Task 10: make tasktracker-dev a two-source Application (chart + $values) (#7)
+
+$ argocd app get tasktracker-dev | sed -n "/^Sources/,/^Health/p"
+Sources:
+- Repo:             https://github.com/liberationzany/dso202-gitops.git
+  Target:           main
+  Path:             charts/tasktracker
+  Helm Values:      $values/environments/dev/values.yaml
+- Repo:             https://github.com/liberationzany/dso202-gitops.git
+  Target:           main
+  Ref:              values
+SyncWindow:         Sync Allowed
+Sync Policy:        Automated (Prune)
+Sync Status:        Synced to main
+Health Status:      Healthy
+
+$ kubectl get applications -n argocd
+NAME                  SYNC STATUS   HEALTH STATUS
+platform-dev          Synced        Healthy
+platform-staging      Synced        Healthy
+root                  Synced        Healthy
+sealed-secrets        Synced        Healthy
+tasktracker-dev       Synced        Healthy
+tasktracker-staging   Synced        Healthy
+
+$ kubectl get deploy -n dso202-dev -o custom-columns=NAME:.metadata.name,GENERATION:.metadata.generation,IMAGE:.spec.template.spec.containers[0].image   # generation unchanged: no rollout
+NAME                   GENERATION   IMAGE
+tasktracker-backend    1            local/dso202-backend:1.1
+tasktracker-frontend   1            local/dso202-frontend:1.1
+
+$ argocd app manifests tasktracker-dev | grep -E 'nodePort: 3008|BACKEND_URL|value: "development"'   # dev-only values, read through $values
+  BACKEND_URL: http://localhost:30082
+    nodePort: 30082
+    nodePort: 30080
+        - name: BACKEND_URL
+              key: BACKEND_URL
+
+$ curl -s http://localhost:30082/api/status; echo; curl -s -o /dev/null -w 'dev frontend -> %{http_code}\n' http://localhost:30080/
+{"status":"ok","db":"connected"}
+dev frontend -> 200
+
+$ kubectl get application tasktracker-dev -n argocd -o jsonpath='status.sync.revisions: {.status.sync.revisions}{"\n"}'
+status.sync.revisions: ["5b9efe994a1ee8908f33076c708f1edb25b0554e","5b9efe994a1ee8908f33076c708f1edb25b0554e"]
+
+$ argocd app manifests tasktracker-dev | grep -A1 'name: APP_ENV'
+        - name: APP_ENV
+          value: development
+```
+
+The conversion re-rendered exactly the same manifests: both Deployments kept
+`generation 1` (no rollout), the dev-only values (NodePorts 30080/30082,
+`BACKEND_URL`, `APP_ENV=development`) are present, and
+`status.sync.revisions` now lists one revision per source.
+
+**When is separating the sources useful?** Separating the sources is useful when the chart and the configuration move
+at different speeds or belong to different people. For example, a platform
+team can pin the chart to a reviewed release tag (`targetRevision: v1.2.0` on
+source 1) while the values source keeps following `main`. Dev then gets every
+configuration change - a replica count, a new `APP_ENV` - as soon as it
+merges, but never an untested template change; a chart upgrade becomes one
+deliberate edit to source 1. The same split lets the values live in a
+separate configuration repository with its own access rules, which is the
+separation the Argo CD best-practice guide recommends (Q6a), without copying
+the chart into it.
