@@ -181,16 +181,16 @@ cluster keep working until it is rebuilt. What must be done: let the new
 controller generate a key, obtain the plaintext values again (password
 manager, or read them from a still-running cluster), re-seal every secret for
 every namespace, commit, and take a new backup — and, if the values cannot be
-recovered, rotate the database passwords. Task 9 showed the opposite case: with
-the backup restored first, the platform Applications were Healthy within
-seconds.
+recovered, rotate the database passwords. In Task 9 I saw the opposite case:
+because I restored the backup first, the platform Applications were Healthy
+within seconds.
 
 ### Q3 — Synced vs Healthy
 
 *Synced* compares desired and live **configuration** ("is what Git says
 applied?"); *Healthy* assesses whether the applied objects **work** (Pods
-ready, rollout complete). They are independent. Example from Task 7: after
-the faulty backend release dev showed
+ready, rollout complete). They are independent. An example from my Task 7:
+after the faulty backend release, dev showed
 
 ```
 Sync Status:        Synced to main (98ea4e5)
@@ -198,10 +198,10 @@ Health Status:      Degraded
 apps  Deployment  dso202-dev  tasktracker-backend  Synced  Degraded  Deployment "tasktracker-backend" exceeded its progress deadline
 ```
 
-— Git was applied exactly, but the new Pod crash-looped. The reverse was seen
-in Task 8, Drill 2: staging was *OutOfSync* (3 live replicas vs 1 in Git) yet
-*Healthy*. Observation for the brief's expectation in Task 5: before the first
-staging sync the root reported **Healthy** while its child
+— Git was applied exactly, but the new Pod crash-looped. I saw the reverse in
+Task 8, Drill 2: staging was *OutOfSync* (3 live replicas vs 1 in Git) yet
+*Healthy*. One thing that did not match the brief's expectation in Task 5:
+before my first staging sync the root reported **Healthy** while its child
 `tasktracker-staging` was *Missing* — in v3.5.6 a child's *Missing* did not
 lower the root's aggregate, whereas *Progressing* and *Degraded* did.
 
@@ -233,8 +233,8 @@ the cluster then follows like any release. `git revert` is preferred to
 deleting the commit because history is the audit trail and the shared
 contract: removing a pushed commit rewrites `main` under everyone else (a
 force push), hides what was deployed and when, and the bad commit remains
-reachable through tags, forks and caches anyway. Two observations from this
-run: the failed release's sync operation kept **retrying for ~7.5 minutes**
+reachable through tags, forks and caches anyway. Two things I observed
+myself: the failed release's sync operation kept **retrying for ~7.5 minutes**
 (retry limit 5) and blocked the revert from being applied until it gave up —
 `argocd app terminate-op` would have shortened that; and staging never ran the
 faulty backend (`argocd app history tasktracker-staging`: v1.0.0, v1.1.0,
