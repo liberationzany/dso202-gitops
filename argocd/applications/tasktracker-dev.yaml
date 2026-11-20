@@ -1,10 +1,16 @@
 # =============================================================================
 # File       : argocd/applications/tasktracker-dev.yaml
 # Assignment : DSO202 Assignment 4
-# Descriptor : Unit IV 4.3.1 (Application CRDs), 4.3.2 (sync policies),
-#              4.3.3 (health checks); Unit III 3.2 (Helm)
+# Descriptor : Unit IV 4.3.1 (Application CRDs, multiple sources), 4.3.2 (sync
+#              policies), 4.3.3 (health checks); Unit III 3.2 (Helm)
 # Purpose    : Deploys the Task Tracker Helm chart to the dev environment.
 #              Dev follows the tip of main and heals itself automatically.
+# Task 10    : Converted from one 'source' to two 'sources' (bonus task): the
+#              first source supplies the chart, the second only provides the
+#              values file, referenced as $values. Both still follow main, so
+#              the rendered manifests are identical to the single-source
+#              version; what changes is that chart and values are now two
+#              independently pinnable references (see README, Task 10).
 # =============================================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -21,19 +27,28 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: dso202
-  source:
-    repoURL: https://github.com/liberationzany/dso202-gitops.git
-    # Dev tracks a moving reference: every merge to main is deployed.
-    targetRevision: main
-    path: charts/tasktracker
-    helm:
-      # Fixed release name, so that object names are identical in every
-      # environment; the namespace is what distinguishes them.
-      releaseName: tasktracker
-      # Paths are relative to the chart directory (charts/tasktracker), so two
-      # levels up reaches the repository root.
-      valueFiles:
-        - ../../environments/dev/values.yaml
+  # 'sources' replaces 'source'; the two cannot appear together.
+  sources:
+    # Source 1: the chart. Dev tracks a moving reference: every merge to main
+    # is deployed. This revision could instead be pinned to a tag, so that
+    # the chart stays fixed while the values below keep following main.
+    - repoURL: https://github.com/liberationzany/dso202-gitops.git
+      targetRevision: main
+      path: charts/tasktracker
+      helm:
+        # Fixed release name, so that object names are identical in every
+        # environment; the namespace is what distinguishes them.
+        releaseName: tasktracker
+        # $values must be at the start of the path. It resolves to the ROOT of
+        # the source with 'ref: values', so the path is now relative to the
+        # repository root, not to the chart directory (no ../../).
+        valueFiles:
+          - $values/environments/dev/values.yaml
+    # Source 2: no 'path' - nothing is rendered from it. It exists only to be
+    # referenced as $values by the source above.
+    - repoURL: https://github.com/liberationzany/dso202-gitops.git
+      targetRevision: main
+      ref: values
   destination:
     server: https://kubernetes.default.svc
     namespace: dso202-dev
